@@ -25,9 +25,9 @@ static ICoreWebView2 *g_webView = nullptr;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 class MCoreWebView2HandlersImpl
-    : public ICoreWebView2WebMessageReceivedEventHandler
-    , public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+    : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
     , public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+    , public ICoreWebView2WebMessageReceivedEventHandler
 {
 protected:
     LONG m_cRefs = 1; // reference counter
@@ -36,26 +36,7 @@ protected:
 public:
     MCoreWebView2HandlersImpl(HWND hWnd) : m_hWnd(hWnd) {  }
 
-    // ICoreWebView2WebMessageReceivedEventHandler
-    HRESULT STDMETHODCALLTYPE Invoke(
-        ICoreWebView2* sender,
-        ICoreWebView2WebMessageReceivedEventArgs* args) override
-    {
-        // Get the message as a string
-        LPWSTR message = nullptr;
-        HRESULT hr = args->TryGetWebMessageAsString(&message);
-        if (SUCCEEDED(hr) && message) {
-            std::wstring msg(message);
-            CoTaskMemFree(message);
-
-            msg += L"\n";
-            OutputDebugStringW(msg.c_str()); // Debug output
-        }
-
-        return S_OK;
-    }
-
-    // ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+    // ICoreWebView2CreateCoreWebView2ControllerCompletedHandler interface
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
         if (FAILED(result) || !controller)
             return result;
@@ -109,7 +90,7 @@ public:
         return S_OK;
     }
 
-    // ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+    // ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler interface
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Environment* env) override {
         if (FAILED(result) || !env) 
             return result;
@@ -118,6 +99,26 @@ public:
         return S_OK;
     }
 
+    // ICoreWebView2WebMessageReceivedEventHandler interface
+    HRESULT STDMETHODCALLTYPE Invoke(
+        ICoreWebView2* sender,
+        ICoreWebView2WebMessageReceivedEventArgs* args) override
+    {
+        // Get the message as a string
+        LPWSTR message = nullptr;
+        HRESULT hr = args->TryGetWebMessageAsString(&message);
+        if (SUCCEEDED(hr) && message) {
+            std::wstring msg(message);
+            CoTaskMemFree(message);
+
+            msg += L"\n";
+            OutputDebugStringW(msg.c_str()); // Debug output
+        }
+
+        return S_OK;
+    }
+
+    // IUnknown interface
     ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
     ULONG STDMETHODCALLTYPE Release() override {
         if (--m_cRefs == 0) {
@@ -129,9 +130,9 @@ public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override
     {
         if (riid == IID_IUnknown ||
-            riid == IID_ICoreWebView2WebMessageReceivedEventHandler ||
             riid == IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler ||
-            riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)
+            riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler ||
+            riid == IID_ICoreWebView2WebMessageReceivedEventHandler)
         {
             *ppvObject = this;
             AddRef();
