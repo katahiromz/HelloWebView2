@@ -5,6 +5,7 @@ packages/
 
 *.csproj.user
 *.vcxproj.user
+*.log
 
 Debug/
 Release/
