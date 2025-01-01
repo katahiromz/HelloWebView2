@@ -9,9 +9,7 @@ project(HelloWebView2 CXX)
 
 # Architecture option
 option(ARCH "Choose architecture (x86 or amd64)" OFF)
-if(ARCH STREQUAL OFF)
-    set(ARCH x86)
-elseif(${ARCH} STREQUAL amd64)
+if(${ARCH} STREQUAL amd64)
     set(ARCH amd64)
 elseif(${ARCH} STREQUAL arm64)
     message(FATAL_ERROR "arm64 is not supported yet")
@@ -20,6 +18,7 @@ elseif(${ARCH} STREQUAL x86)
 else()
     set(ARCH x86)
 endif()
+message(STATUS "ARCH = ${ARCH}")
 
 if(MSVC)
     message(FATAL_ERROR "Please use the solution file!")
