@@ -26,7 +26,7 @@ WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg)
     {
     case WM_SIZE:
-        if (g_webviewController != nullptr)
+        if (g_webviewController)
         {
             RECT bounds;
             GetClientRect(hWnd, &bounds);
@@ -93,7 +93,7 @@ INT WINAPI WinMain(
                 env->CreateCoreWebView2Controller(hWnd, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                     [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
                         // Initialize webview
-                        if (controller != nullptr) {
+                        if (controller) {
                             g_webviewController = controller;
                             g_webviewController->get_CoreWebView2(&g_webView);
                         }
