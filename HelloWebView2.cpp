@@ -1,40 +1,238 @@
 // HelloWebView2 --- A sample code of WebView2
 // License: MIT
+
+// Detect memory leaks (MSVC Debug only)
+#if defined(_MSC_VER) && !defined(NDEBUG) && !defined(_CRTDBG_MAP_ALLOC)
+    #define _CRTDBG_MAP_ALLOC
+    #include <crtdbg.h>
+#endif
+
 #include <windows.h>
 #include <stdlib.h>
 #include <string>
 #include <tchar.h>
-#include <wrl.h>
-#include <wil/com.h>
+#include <shlwapi.h>
 #include "WebView2.h"
-
-using namespace Microsoft::WRL;
 
 #define CLASSNAME _T("HelloWebView2 by katahiromz")
 #define TITLE _T("HelloWebView2")
 #define URL L"https://google.com/"
 
-// Global variables
-HINSTANCE g_hInst;
-static wil::com_ptr<ICoreWebView2Controller> g_webviewController;
-static wil::com_ptr<ICoreWebView2> g_webView;
+HINSTANCE g_hInst = nullptr;
+static ICoreWebView2Controller *g_webviewController = nullptr;
+static ICoreWebView2 *g_webView = nullptr;
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+// Custom implementation of ICoreWebView2WebMessageReceivedEventHandler
+class ICoreWebView2WebMessageReceivedEventHandlerImpl
+    : public ICoreWebView2WebMessageReceivedEventHandler
+{
+protected:
+    LONG m_cRefs = 1; // reference counter
+
+public:
+    ICoreWebView2WebMessageReceivedEventHandlerImpl() {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(
+        ICoreWebView2* sender,
+        ICoreWebView2WebMessageReceivedEventArgs* args) override
+    {
+        // Get the message as a string
+        LPWSTR message = nullptr;
+        HRESULT hr = args->TryGetWebMessageAsString(&message);
+        if (SUCCEEDED(hr) && message) {
+            std::wstring msg(message);
+            CoTaskMemFree(message);
+
+            msg += L"\n";
+            OutputDebugStringW(msg.c_str()); // Debug output
+        }
+
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        if (--m_cRefs == 0) {
+            delete this;
+            return 0;
+        }
+        return m_cRefs;
+    }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2WebMessageReceivedEventHandler) {
+            *ppvObject = this;
+            AddRef();
+            return S_OK;
+        }
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+// Custom implementation of ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+class ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl
+    : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+{
+protected:
+    LONG m_cRefs = 1; // reference counter
+    HWND m_hWnd = nullptr;
+
+public:
+    ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl(HWND hWnd) : m_hWnd(hWnd) {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
+        if (FAILED(result) || !controller) return result;
+
+        g_webviewController = controller;
+        g_webviewController->AddRef();
+
+        g_webviewController->get_CoreWebView2(&g_webView);
+        if (!g_webView) return E_FAIL;
+
+        // Configure settings
+        ICoreWebView2Settings* settings = nullptr;
+        g_webView->get_Settings(&settings);
+        if (settings) {
+            settings->put_AreDefaultContextMenusEnabled(TRUE);
+            settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+            settings->put_IsBuiltInErrorPageEnabled(TRUE);
+            settings->put_IsScriptEnabled(TRUE);
+            settings->put_IsStatusBarEnabled(FALSE);
+            settings->put_IsWebMessageEnabled(TRUE);
+            settings->put_IsZoomControlEnabled(FALSE);
+            settings->Release();
+        }
+
+        // Resize WebView
+        PostMessage(m_hWnd, WM_SIZE, 0, 0);
+
+#if 0
+        // Navigate to URL
+        g_webView->Navigate(URL);
+#else
+        // Navigate content
+        auto content = L"<html><body><h1>HelloWebView2</h1>"
+            L"<p>This is an HTML.</p>"
+            L"<script>window.chrome.webview.postMessage('This is a message from JavaScript to native');"
+            L"window.chrome.webview.addEventListener('message', event => { alert(event.data); });</script>"
+            L"</body></html>";
+        g_webView->NavigateToString(content);
+#endif
+
+#if 1
+        EventRegistrationToken token;
+        auto handler = new ICoreWebView2WebMessageReceivedEventHandlerImpl();
+        g_webView->add_WebMessageReceived(handler, &token);
+        handler->Release();
+#endif
+
+#if 1
+        // Post message to JavaScript
+        g_webView->PostWebMessageAsString(L"This is a message from native to JavaScript");
+#endif
+
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        if (--m_cRefs == 0) {
+            delete this;
+            return 0;
+        }
+        return m_cRefs;
+    }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) {
+            *ppvObject = this;
+            AddRef();
+            return S_OK;
+        }
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+// Custom implementation of ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+class ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl
+    : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+{
+protected:
+    LONG m_cRefs = 1; // reference counter
+    HWND m_hWnd = nullptr;
+
+public:
+    ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl(HWND hWnd) : m_hWnd(hWnd) {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Environment* env) override {
+        if (FAILED(result) || !env) return result;
+
+        auto handler = new ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl(m_hWnd);
+        env->CreateCoreWebView2Controller(m_hWnd, handler);
+        handler->Release();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        if (--m_cRefs == 0) {
+            delete this;
+            return 0;
+        }
+        return m_cRefs;
+    }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) {
+            *ppvObject = this;
+            AddRef();
+            return S_OK;
+        }
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+#define MY_WM_CREATE_WEBVIEW (WM_USER + 100)
 
 // The window procedure
 LRESULT CALLBACK
-WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    switch (uMsg)
-    {
-    case WM_SIZE:
-        if (g_webviewController)
+WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_CREATE:
+        PostMessage(hWnd, MY_WM_CREATE_WEBVIEW, 0, 0);
+        return 0;
+    case MY_WM_CREATE_WEBVIEW:
         {
+            auto handler = new ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl(hWnd);
+            CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr, handler);
+            handler->Release();
+        }
+        return 0;
+    case WM_DESTROY:
+        if (g_webviewController) {
+            g_webviewController->Release();
+            g_webviewController = nullptr;
+        }
+        if (g_webView) {
+            g_webView->Release();
+            g_webView = nullptr;
+        }
+        PostQuitMessage(0);
+        break;
+    case WM_SIZE:
+        if (g_webviewController) {
             RECT bounds;
             GetClientRect(hWnd, &bounds);
             g_webviewController->put_Bounds(bounds);
         }
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
         break;
     default:
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
@@ -61,8 +259,7 @@ INT WINAPI WinMain(
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wcex.lpszClassName = CLASSNAME;
     wcex.hIconSm = LoadIcon(wcex.hInstance, IDI_APPLICATION);
-    if (!RegisterClassEx(&wcex))
-    {
+    if (!RegisterClassEx(&wcex)) {
         MessageBox(NULL, _T("RegisterClassEx failed"), TITLE, MB_ICONERROR);
         return 1;
     }
@@ -75,8 +272,7 @@ INT WINAPI WinMain(
                              NULL,
                              hInstance,
                              NULL);
-    if (!hWnd)
-    {
+    if (!hWnd) {
         MessageBox(NULL, _T("CreateWindow failed"), TITLE, MB_ICONERROR);
         return 1;
     }
@@ -85,97 +281,26 @@ INT WINAPI WinMain(
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
 
-    // WebView2 code starts here
-    CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
-        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-            [hWnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
-                // Create a CoreWebView2Controller and get the associated CoreWebView2 whose parent is the main window hWnd
-                env->CreateCoreWebView2Controller(hWnd, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                    [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                        // Initialize webview
-                        if (controller) {
-                            g_webviewController = controller;
-                            g_webviewController->get_CoreWebView2(&g_webView);
-                        }
-
-                        // Add some webview settings
-                        wil::com_ptr<ICoreWebView2Settings> settings;
-                        g_webView->get_Settings(&settings);
-                        settings->put_IsScriptEnabled(TRUE);
-                        settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-                        settings->put_IsWebMessageEnabled(TRUE);
-                        settings->put_AreDefaultContextMenusEnabled(TRUE);
-                        settings->put_IsStatusBarEnabled(FALSE);
-                        settings->put_IsZoomControlEnabled(FALSE);
-                        settings->put_IsBuiltInErrorPageEnabled(TRUE);
-#ifdef NDEBUG
-                        settings->put_AreDevToolsEnabled(FALSE);
-#endif
-
-                        // Resize the window content
-                        PostMessage(hWnd, WM_SIZE, 0, 0);
-
-                        // Navigate
-#if 1
-                        g_webView->Navigate(URL);
-#else
-                        auto content = L"<html><body><h1>HelloWebView2</h1>"
-                            L"<p>This is an HTML.</p>"
-                            L"<script>window.chrome.webview.postMessage('This is a message from JavaScript to native');"
-                            L"window.chrome.webview.addEventListener('message', event => { alert(event.data); });</script>"
-                            L"</body></html>";
-                        g_webView->NavigateToString(content);
-#endif
-
-                        // Register an ICoreWebView2NavigationStartingEventHandler to cancel some navigation
-                        EventRegistrationToken token;
-                        g_webView->add_NavigationStarting(Callback<ICoreWebView2NavigationStartingEventHandler>(
-                            [](ICoreWebView2* g_webView, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT {
-                                wil::unique_cotaskmem_string uri;
-                                args->get_Uri(&uri);
-                                std::wstring source(uri.get());
-                                auto scheme = source.substr(0, 5);
-                                if (scheme != L"https" && scheme != L"http:" && scheme != L"data:") {
-                                    args->put_Cancel(true);
-                                }
-                                return S_OK;
-                            }).Get(), &token
-                        );
-
-#if 0
-                        // Receive message from JavaScript code: window.chrome.webview.postMessage("...");
-                        g_webView->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-                            [](ICoreWebView2* webView, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
-                                wil::unique_cotaskmem_string message;
-                                args->TryGetWebMessageAsString(&message);
-                                std::wstring msg = message.get();
-                                msg += L'\n';
-                                ::OutputDebugStringW(msg.c_str()); // Debug output
-                                return S_OK;
-                            }).Get(), &token
-                        );
-#endif
-
-#if 0
-                        // Post message to JavaScript
-                        g_webView->PostWebMessageAsString(L"This is a message from native to JavaScript");
-#endif
-
-                        return S_OK;
-                    }).Get());
-                return S_OK;
-            }
-        ).Get()
-    );
-    // WebView2 code ends here
-
     // The message loop
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0))
-    {
+    while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+#if (_WIN32_WINNT >= 0x0500) && !defined(NDEBUG)
+    // Detect handle leaks (Debug only)
+    TCHAR szText[MAX_PATH];
+    wnsprintf(szText, _countof(szText), TEXT("GDI Objects: %ld, User Objects: %ld\n"),
+              GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS),
+              GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS));
+    OutputDebugString(szText);
+#endif
+
+#if defined(_MSC_VER) && !defined(NDEBUG)
+    // Detect memory leaks (MSVC Debug only)
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
 
     return (INT)msg.wParam;
 }
