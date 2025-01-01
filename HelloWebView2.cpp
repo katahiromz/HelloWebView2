@@ -41,7 +41,7 @@ public:
     MCoreWebView2HandlersImpl(HWND hWnd) : m_hWnd(hWnd) {  }
 
     // ICoreWebView2CreateCoreWebView2ControllerCompletedHandler interface
-    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
+    STDMETHODIMP Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
         if (FAILED(result) || !controller)
             return result;
 
@@ -95,7 +95,7 @@ public:
     }
 
     // ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler interface
-    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Environment* env) override {
+    STDMETHODIMP Invoke(HRESULT result, ICoreWebView2Environment* env) override {
         if (FAILED(result) || !env) 
             return result;
 
@@ -104,7 +104,7 @@ public:
     }
 
     // ICoreWebView2WebMessageReceivedEventHandler interface
-    HRESULT STDMETHODCALLTYPE Invoke(
+    STDMETHODIMP Invoke(
         ICoreWebView2* sender,
         ICoreWebView2WebMessageReceivedEventArgs* args) override
     {
@@ -123,16 +123,15 @@ public:
     }
 
     // IUnknown interface
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
-    ULONG STDMETHODCALLTYPE Release() override {
+    STDMETHODIMP_(ULONG) AddRef() override { return ++m_cRefs; }
+    STDMETHODIMP_(ULONG) Release() override {
         if (--m_cRefs == 0) {
             delete this;
             return 0;
         }
         return m_cRefs;
     }
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override
-    {
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override {
         if (riid == IID_IUnknown ||
             riid == IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler ||
             riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler ||
