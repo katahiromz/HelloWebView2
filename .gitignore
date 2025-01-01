@@ -10,7 +10,9 @@ packages/
 *.lib
 lib*.a
 WebView2Loader.dll
-!compat/WebView2Loader.dll
+!x86/WebView2Loader.dll
+!amd64/WebView2Loader.dll
+!arm64/WebView2Loader.dll
 
 CMakeCache.txt
 .ninja*
