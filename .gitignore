@@ -1,0 +1,17 @@
+# VS Code
+.vs/
+.vscode/
+packages/
+
+*.csproj.user
+*.vcxproj.user
+
+Debug/
+Release/
+x64/
+x86/
+Win32/
+ARM64/
+
+bin/
+obj/
