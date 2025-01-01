@@ -215,7 +215,7 @@ INT WINAPI WinMain(
     // Create the main window
     DWORD style = WS_OVERLAPPEDWINDOW;
     HWND hWnd = CreateWindow(CLASSNAME, TITLE, style,
-                             CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+                             CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
                              NULL,
                              NULL,
                              hInstance,
