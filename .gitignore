@@ -6,6 +6,18 @@ packages/
 *.csproj.user
 *.vcxproj.user
 *.log
+*.exe
+*.lib
+lib*.a
+WebView2Loader.dll
+
+CMakeCache.txt
+.ninja*
+*.ninja
+*.cmake
+
+CMakeFiles/
+HelloWebView2.exe.WebView2/
 
 Debug/
 Release/

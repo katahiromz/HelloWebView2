@@ -12,7 +12,11 @@
 #include <string>
 #include <tchar.h>
 #include <shlwapi.h>
-#include "WebView2.h"
+#ifdef _MSC_VER
+    #include "WebView2.h"
+#else
+    #include "compat/WebView2.h"
+#endif
 
 #define CLASSNAME _T("HelloWebView2 by katahiromz")
 #define TITLE _T("HelloWebView2")
