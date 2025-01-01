@@ -30,5 +30,5 @@ bin/
 obj/
 
 !x86/WebView2Loader.dll
-!amd64/WebView2Loader.dll
-!arm64/WebView2Loader.dll
+!x64/WebView2Loader.dll
+!ARM64/WebView2Loader.dll
