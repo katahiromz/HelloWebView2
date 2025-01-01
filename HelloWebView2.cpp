@@ -24,16 +24,19 @@ static ICoreWebView2 *g_webView = nullptr;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-// Custom implementation of ICoreWebView2WebMessageReceivedEventHandler
-class ICoreWebView2WebMessageReceivedEventHandlerImpl
+class MCoreWebView2HandlersImpl
     : public ICoreWebView2WebMessageReceivedEventHandler
+    , public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+    , public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
 {
 protected:
     LONG m_cRefs = 1; // reference counter
+    HWND m_hWnd = nullptr;
 
 public:
-    ICoreWebView2WebMessageReceivedEventHandlerImpl() {}
+    MCoreWebView2HandlersImpl(HWND hWnd) : m_hWnd(hWnd) {  }
 
+    // ICoreWebView2WebMessageReceivedEventHandler
     HRESULT STDMETHODCALLTYPE Invoke(
         ICoreWebView2* sender,
         ICoreWebView2WebMessageReceivedEventArgs* args) override
@@ -52,40 +55,10 @@ public:
         return S_OK;
     }
 
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
-    ULONG STDMETHODCALLTYPE Release() override {
-        if (--m_cRefs == 0) {
-            delete this;
-            return 0;
-        }
-        return m_cRefs;
-    }
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
-        if (riid == IID_IUnknown || riid == IID_ICoreWebView2WebMessageReceivedEventHandler) {
-            *ppvObject = this;
-            AddRef();
-            return S_OK;
-        }
-        *ppvObject = nullptr;
-        return E_NOINTERFACE;
-    }
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-
-// Custom implementation of ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
-class ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl
-    : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
-{
-protected:
-    LONG m_cRefs = 1; // reference counter
-    HWND m_hWnd = nullptr;
-
-public:
-    ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl(HWND hWnd) : m_hWnd(hWnd) {}
-
+    // ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
-        if (FAILED(result) || !controller) return result;
+        if (FAILED(result) || !controller)
+            return result;
 
         g_webviewController = controller;
         g_webviewController->AddRef();
@@ -125,9 +98,7 @@ public:
 
 #if 1
         EventRegistrationToken token;
-        auto handler = new ICoreWebView2WebMessageReceivedEventHandlerImpl();
-        g_webView->add_WebMessageReceived(handler, &token);
-        handler->Release();
+        g_webView->add_WebMessageReceived(this, &token);
 #endif
 
 #if 1
@@ -138,44 +109,12 @@ public:
         return S_OK;
     }
 
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_cRefs; }
-    ULONG STDMETHODCALLTYPE Release() override {
-        if (--m_cRefs == 0) {
-            delete this;
-            return 0;
-        }
-        return m_cRefs;
-    }
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
-        if (riid == IID_IUnknown || riid == IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) {
-            *ppvObject = this;
-            AddRef();
-            return S_OK;
-        }
-        *ppvObject = nullptr;
-        return E_NOINTERFACE;
-    }
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-
-// Custom implementation of ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
-class ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl
-    : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
-{
-protected:
-    LONG m_cRefs = 1; // reference counter
-    HWND m_hWnd = nullptr;
-
-public:
-    ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl(HWND hWnd) : m_hWnd(hWnd) {}
-
+    // ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Environment* env) override {
-        if (FAILED(result) || !env) return result;
+        if (FAILED(result) || !env) 
+            return result;
 
-        auto handler = new ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerImpl(m_hWnd);
-        env->CreateCoreWebView2Controller(m_hWnd, handler);
-        handler->Release();
+        env->CreateCoreWebView2Controller(m_hWnd, this);
         return S_OK;
     }
 
@@ -187,8 +126,13 @@ public:
         }
         return m_cRefs;
     }
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
-        if (riid == IID_IUnknown || riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) {
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override
+    {
+        if (riid == IID_IUnknown ||
+            riid == IID_ICoreWebView2WebMessageReceivedEventHandler ||
+            riid == IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler ||
+            riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)
+        {
             *ppvObject = this;
             AddRef();
             return S_OK;
@@ -211,7 +155,7 @@ WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         return 0;
     case MY_WM_CREATE_WEBVIEW:
         {
-            auto handler = new ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl(hWnd);
+            auto handler = new MCoreWebView2HandlersImpl(hWnd);
             CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr, handler);
             handler->Release();
         }
